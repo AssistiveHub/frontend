@@ -48,7 +48,7 @@ export default function Dashboard() {
     const loadConnectedServices = async () => {
         try {
             // 백엔드에서 실제 연동된 서비스들 조회
-            const [slackResult, notionResult, githubResult] = await Promise.all([
+            const [slackResult, notionResult, githubResult] = await Promise.allSettled([
                 integrationApi.slack.getIntegrations(true), // 활성화된 것만
                 integrationApi.notion.getIntegrations(true),
                 integrationApi.github.getIntegrations(true)
@@ -57,36 +57,42 @@ export default function Dashboard() {
             const services: ConnectedService[] = []
 
             // 슬랙 연동 추가
-            if (slackResult.success && slackResult.data) {
-                slackResult.data.forEach((integration: Record<string, unknown>) => {
+            if (slackResult.status === 'fulfilled' && slackResult.value.success && slackResult.value.data) {
+                slackResult.value.data.forEach((integration: Record<string, unknown>) => {
                     services.push({
                         id: `slack-${integration.id}`,
                         type: 'slack',
                         name: (integration.serviceName as string) || (integration.teamName as string) || '슬랙'
                     })
                 })
+            } else if (slackResult.status === 'rejected') {
+                console.warn('Slack integration API not available:', slackResult.reason)
             }
 
             // 노션 연동 추가
-            if (notionResult.success && notionResult.data) {
-                notionResult.data.forEach((integration: Record<string, unknown>) => {
+            if (notionResult.status === 'fulfilled' && notionResult.value.success && notionResult.value.data) {
+                notionResult.value.data.forEach((integration: Record<string, unknown>) => {
                     services.push({
                         id: `notion-${integration.id}`,
                         type: 'notion',
                         name: (integration.serviceName as string) || (integration.workspaceName as string) || '노션'
                     })
                 })
+            } else if (notionResult.status === 'rejected') {
+                console.warn('Notion integration API not available:', notionResult.reason)
             }
 
-            // 깃허브 연동 추가
-            if (githubResult.success && githubResult.data) {
-                githubResult.data.forEach((integration: Record<string, unknown>) => {
+            // 깃허브 연동 추가 (API가 없어서 실패할 수 있음)
+            if (githubResult.status === 'fulfilled' && githubResult.value.success && githubResult.value.data) {
+                githubResult.value.data.forEach((integration: Record<string, unknown>) => {
                     services.push({
                         id: `git-${integration.id}`,
                         type: 'git',
                         name: (integration.serviceName as string) || (integration.repositoryName as string) || '깃허브'
                     })
                 })
+            } else if (githubResult.status === 'rejected') {
+                console.warn('GitHub integration API not available:', githubResult.reason)
             }
 
             setConnectedServices(services)
