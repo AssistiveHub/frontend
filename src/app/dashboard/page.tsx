@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import MainContent from '@/components/MainContent'
 import ServiceSetupModal from '@/components/ServiceSetupModal'
+import { tokenUtils, userUtils } from '@/utils/api'
+import { AuthResponse } from '@/types/auth'
 
 interface ConnectedService {
     id: string
@@ -14,17 +16,26 @@ interface ConnectedService {
 
 export default function Dashboard() {
     const [isLoggedIn, setIsLoggedIn] = useState(false)
+    const [user, setUser] = useState<Partial<AuthResponse> | null>(null)
     const [selectedMenu, setSelectedMenu] = useState('overview')
     const [connectedServices, setConnectedServices] = useState<ConnectedService[]>([])
     const [showServiceSetup, setShowServiceSetup] = useState<string | null>(null)
     const router = useRouter()
 
     useEffect(() => {
-        const loggedIn = localStorage.getItem('isLoggedIn')
-        if (!loggedIn) {
+        // JWT 토큰 및 사용자 정보 확인
+        const isAuthenticated = tokenUtils.isLoggedIn()
+        const userData = userUtils.getUser()
+        
+        if (!isAuthenticated || !userData) {
+            // 토큰이 없거나 사용자 정보가 없으면 로그인 페이지로 리다이렉트
+            tokenUtils.removeToken()
+            userUtils.removeUser()
             router.push('/')
         } else {
             setIsLoggedIn(true)
+            setUser(userData)
+            
             // 연결된 서비스 정보를 localStorage에서 불러오기
             const savedServices = localStorage.getItem('connectedServices')
             if (savedServices) {
@@ -68,6 +79,13 @@ export default function Dashboard() {
         setShowServiceSetup(null)
     }
 
+    const handleLogout = () => {
+        tokenUtils.removeToken()
+        userUtils.removeUser()
+        localStorage.removeItem('connectedServices')
+        router.push('/')
+    }
+
     const getServiceLabel = (serviceType: string) => {
         const labels: Record<string, string> = {
             slack: '슬랙',
@@ -93,6 +111,8 @@ export default function Dashboard() {
                     onMenuSelect={setSelectedMenu}
                     connectedServices={connectedServices}
                     onServiceAdd={handleServiceAdd}
+                    user={user}
+                    onLogout={handleLogout}
                 />
                 <MainContent
                     selectedMenu={selectedMenu}

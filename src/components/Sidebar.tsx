@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import { AuthResponse } from '@/types/auth'
 
 interface ConnectedService {
     id: string
@@ -14,6 +15,8 @@ interface SidebarProps {
     onMenuSelect: (menu: string) => void
     connectedServices: ConnectedService[]
     onServiceAdd: (serviceType: string) => void
+    user: Partial<AuthResponse> | null
+    onLogout: () => void
 }
 
 const allServices = [
@@ -22,21 +25,16 @@ const allServices = [
     { id: 'git', label: '깃', icon: '🔧' },
 ]
 
-export default function Sidebar({ selectedMenu, onMenuSelect, connectedServices, onServiceAdd }: SidebarProps) {
+export default function Sidebar({ 
+    selectedMenu, 
+    onMenuSelect, 
+    connectedServices, 
+    onServiceAdd, 
+    user, 
+    onLogout 
+}: SidebarProps) {
     const [showAddMenu, setShowAddMenu] = useState(false)
     const [showDebugMenu, setShowDebugMenu] = useState(false)
-
-    const handleLogout = () => {
-        localStorage.removeItem('isLoggedIn')
-        localStorage.removeItem('connectedServices')
-        // 모든 서비스 설정도 제거
-        Object.keys(localStorage).forEach(key => {
-            if (key.includes('_config')) {
-                localStorage.removeItem(key)
-            }
-        })
-        window.location.href = '/'
-    }
 
     const handleServiceAdd = (serviceType: string) => {
         onServiceAdd(serviceType)
@@ -78,6 +76,7 @@ export default function Sidebar({ selectedMenu, onMenuSelect, connectedServices,
                 {showDebugMenu && (
                     <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
                         <div className="mb-1">연결된 서비스: {connectedServices.length}개</div>
+                        <div className="mb-1">사용자: {user?.email || 'N/A'}</div>
                         <button
                             onClick={handleClearAllData}
                             className="text-red-600 hover:text-red-700"
@@ -170,13 +169,21 @@ export default function Sidebar({ selectedMenu, onMenuSelect, connectedServices,
                 <div className="flex items-center justify-between">
                     <div className="flex items-center">
                         <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                            U
+                            {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
                         </div>
-                        <span className="ml-2 text-sm text-gray-700">사용자</span>
+                        <div className="ml-2">
+                            <div className="text-sm text-gray-700 font-medium">{user?.name || '사용자'}</div>
+                            {user?.email && (
+                                <div className="text-xs text-gray-500 truncate max-w-32" title={user.email}>
+                                    {user.email}
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <button
-                        onClick={handleLogout}
+                        onClick={onLogout}
                         className="text-gray-500 hover:text-gray-700 text-sm"
+                        title="로그아웃"
                     >
                         로그아웃
                     </button>

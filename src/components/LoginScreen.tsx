@@ -3,19 +3,51 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import { authApi, tokenUtils, userUtils, ApiError } from '@/utils/api'
+import SignupScreen from './SignupScreen'
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+    const [showSignup, setShowSignup] = useState(false)
     const router = useRouter()
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
-        // 임시 로그인 로직 (실제로는 인증 서비스 연동 필요)
-        if (email && password) {
-            localStorage.setItem('isLoggedIn', 'true')
-            router.push('/dashboard')
+        
+        if (!email || !password) {
+            setError('이메일과 비밀번호를 입력해주세요.')
+            return
         }
+
+        setLoading(true)
+        setError('')
+
+        try {
+            const response = await authApi.login({ email, password })
+            
+            // 로그인 성공 시 토큰과 사용자 정보 저장
+            tokenUtils.setToken(response.token)
+            userUtils.setUser(response)
+            
+            // 대시보드로 이동
+            router.push('/dashboard')
+        } catch (error) {
+            if (error instanceof ApiError) {
+                setError(error.message)
+            } else {
+                setError('로그인 중 오류가 발생했습니다.')
+            }
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // 회원가입 화면 표시
+    if (showSignup) {
+        return <SignupScreen onBackToLogin={() => setShowSignup(false)} />
     }
 
     return (
@@ -34,6 +66,12 @@ export default function LoginScreen() {
                     </div>
                     <p className="text-gray-600">업무 효율성을 위한 통합 플랫폼</p>
                 </div>
+
+                {error && (
+                    <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                        {error}
+                    </div>
+                )}
 
                 <form onSubmit={handleLogin} className="space-y-6">
                     <div>
@@ -68,16 +106,20 @@ export default function LoginScreen() {
 
                     <button
                         type="submit"
-                        className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium"
+                        disabled={loading}
+                        className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        로그인
+                        {loading ? '로그인 중...' : '로그인'}
                     </button>
                 </form>
 
                 <div className="mt-6 text-center">
                     <p className="text-sm text-gray-600">
                         계정이 없으신가요?{' '}
-                        <button className="text-blue-600 hover:text-blue-700 font-medium">
+                        <button 
+                            onClick={() => setShowSignup(true)}
+                            className="text-blue-600 hover:text-blue-700 font-medium"
+                        >
                             회원가입
                         </button>
                     </p>
