@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import MainContent from '@/components/MainContent'
 import ServiceSetupModal from '@/components/ServiceSetupModal'
-import { tokenUtils, userUtils } from '@/utils/api'
-import { AuthResponse } from '@/types/auth'
+import { useAuthContext } from '@/contexts/AuthContext'
 
 interface ConnectedService {
     id: string
@@ -15,28 +14,21 @@ interface ConnectedService {
 }
 
 export default function Dashboard() {
-    const [isLoggedIn, setIsLoggedIn] = useState(false)
-    const [user, setUser] = useState<Partial<AuthResponse> | null>(null)
+    const { user, isLoggedIn, isLoading, logout } = useAuthContext()
     const [selectedMenu, setSelectedMenu] = useState('overview')
     const [connectedServices, setConnectedServices] = useState<ConnectedService[]>([])
     const [showServiceSetup, setShowServiceSetup] = useState<string | null>(null)
     const router = useRouter()
 
     useEffect(() => {
-        // JWT 토큰 및 사용자 정보 확인
-        const isAuthenticated = tokenUtils.isLoggedIn()
-        const userData = userUtils.getUser()
-        
-        if (!isAuthenticated || !userData) {
-            // 토큰이 없거나 사용자 정보가 없으면 로그인 페이지로 리다이렉트
-            tokenUtils.removeToken()
-            userUtils.removeUser()
+        // 로딩이 완료되고 로그인되지 않은 경우 홈으로 리다이렉트
+        if (!isLoading && !isLoggedIn) {
             router.push('/')
-        } else {
-            setIsLoggedIn(true)
-            setUser(userData)
-            
-            // 연결된 서비스 정보를 localStorage에서 불러오기
+            return
+        }
+
+        // 로그인된 경우 연결된 서비스 정보 로드
+        if (isLoggedIn) {
             const savedServices = localStorage.getItem('connectedServices')
             if (savedServices) {
                 try {
@@ -47,7 +39,7 @@ export default function Dashboard() {
                 }
             }
         }
-    }, [router])
+    }, [isLoading, isLoggedIn, router])
 
     const handleServiceAdd = (serviceType: string) => {
         setShowServiceSetup(serviceType)
@@ -80,9 +72,7 @@ export default function Dashboard() {
     }
 
     const handleLogout = () => {
-        tokenUtils.removeToken()
-        userUtils.removeUser()
-        localStorage.removeItem('connectedServices')
+        logout()
         router.push('/')
     }
 
@@ -95,7 +85,8 @@ export default function Dashboard() {
         return labels[serviceType] || serviceType
     }
 
-    if (!isLoggedIn) {
+    // 로딩 중이거나 로그인되지 않은 경우
+    if (isLoading || !isLoggedIn) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>

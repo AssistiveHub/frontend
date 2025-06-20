@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { authApi, tokenUtils, userUtils, ApiError } from '@/utils/api'
+import { authApi, ApiError } from '@/utils/api'
+import { useAuthContext } from '@/contexts/AuthContext'
 import { SignupRequest } from '@/types/auth'
 
 interface SignupScreenProps {
@@ -24,6 +25,7 @@ export default function SignupScreen({ onBackToLogin }: SignupScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { login } = useAuthContext();
   const router = useRouter();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -91,9 +93,8 @@ export default function SignupScreen({ onBackToLogin }: SignupScreenProps) {
 
       const response = await authApi.signup(cleanedData);
       
-      // 로그인 성공 시 토큰과 사용자 정보 저장
-      tokenUtils.setToken(response.token);
-      userUtils.setUser(response);
+      // AuthContext를 통해 로그인 상태 업데이트
+      login(response);
       
       // 대시보드로 이동
       router.push('/dashboard');

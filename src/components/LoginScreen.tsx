@@ -3,15 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { authApi, tokenUtils, userUtils, ApiError } from '@/utils/api'
-import SignupScreen from './SignupScreen'
+import { authApi, ApiError } from '@/utils/api'
+import { useAuthContext } from '@/contexts/AuthContext'
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
-    const [showSignup, setShowSignup] = useState(false)
+    const { login } = useAuthContext()
     const router = useRouter()
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -28,9 +28,8 @@ export default function LoginScreen() {
         try {
             const response = await authApi.login({ email, password })
             
-            // 로그인 성공 시 토큰과 사용자 정보 저장
-            tokenUtils.setToken(response.token)
-            userUtils.setUser(response)
+            // AuthContext를 통해 로그인 상태 업데이트
+            login(response)
             
             // 대시보드로 이동
             router.push('/dashboard')
@@ -45,9 +44,8 @@ export default function LoginScreen() {
         }
     }
 
-    // 회원가입 화면 표시
-    if (showSignup) {
-        return <SignupScreen onBackToLogin={() => setShowSignup(false)} />
+    const handleSignupClick = () => {
+        router.push('/signup')
     }
 
     return (
@@ -117,7 +115,7 @@ export default function LoginScreen() {
                     <p className="text-sm text-gray-600">
                         계정이 없으신가요?{' '}
                         <button 
-                            onClick={() => setShowSignup(true)}
+                            onClick={handleSignupClick}
                             className="text-blue-600 hover:text-blue-700 font-medium"
                         >
                             회원가입
