@@ -121,4 +121,36 @@ export const userUtils = {
   },
 };
 
+// 범용 API 클라이언트
+export const api = {
+  get: <T>(endpoint: string): Promise<T> => {
+    return apiRequest<T>(endpoint, { method: 'GET' });
+  },
+
+  post: <T>(endpoint: string, data?: unknown): Promise<T> => {
+    return apiRequest<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  },
+
+  put: <T>(endpoint: string, data?: unknown): Promise<T> => {
+    return apiRequest<T>(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  },
+
+  patch: <T>(endpoint: string, data?: unknown): Promise<T> => {
+    return apiRequest<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  },
+
+  delete: <T>(endpoint: string): Promise<T> => {
+    return apiRequest<T>(endpoint, { method: 'DELETE' });
+  },
+};
+
 export { ApiError }; 

@@ -28,6 +28,7 @@ export default function Dashboard() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [isSmallScreen, setIsSmallScreen] = useState(false)
     const [showMobileDropdown, setShowMobileDropdown] = useState(false)
+
     const router = useRouter()
 
     useEffect(() => {
@@ -50,6 +51,8 @@ export default function Dashboard() {
             }
         }
     }, [isLoading, isLoggedIn, router])
+
+
 
     // 화면 크기 감지
     useEffect(() => {
@@ -120,6 +123,8 @@ export default function Dashboard() {
         router.push('/settings')
         setShowMobileDropdown(false)
     }
+
+
 
     // 로딩 중이거나 로그인되지 않은 경우
     if (isLoading || !isLoggedIn) {
@@ -291,10 +296,13 @@ export default function Dashboard() {
                         <MainContent
                             selectedMenu={selectedMenu}
                             connectedServices={connectedServices}
+                            hasOpenAIKey={user?.hasOpenAIKey}
                         />
                     </div>
                 </div>
             </div>
+
+
 
             {/* 모바일 드롭다운 배경 클릭 시 닫기 */}
             {isSmallScreen && showMobileDropdown && (

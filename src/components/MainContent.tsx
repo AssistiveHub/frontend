@@ -14,12 +14,13 @@ interface ConnectedService {
 interface MainContentProps {
     selectedMenu: string
     connectedServices: ConnectedService[]
+    hasOpenAIKey?: boolean
 }
 
-export default function MainContent({ selectedMenu, connectedServices }: MainContentProps) {
+export default function MainContent({ selectedMenu, connectedServices, hasOpenAIKey }: MainContentProps) {
     const renderContent = () => {
         if (selectedMenu === 'overview') {
-            return <OverviewContent connectedServices={connectedServices} />
+            return <OverviewContent connectedServices={connectedServices} hasOpenAIKey={hasOpenAIKey} />
         }
 
         // 선택된 메뉴가 특정 서비스 계정인지 확인
@@ -46,7 +47,7 @@ export default function MainContent({ selectedMenu, connectedServices }: MainCon
     }
 
     return (
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 h-full overflow-auto">
             {renderContent()}
         </div>
     )
