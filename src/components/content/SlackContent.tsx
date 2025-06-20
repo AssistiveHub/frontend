@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -28,6 +29,7 @@ interface SlackStats {
     inactiveIntegrations: number
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function SlackContent({ serviceId, serviceName, config }: SlackContentProps) {
     const [integrations, setIntegrations] = useState<SlackIntegration[]>([])
     const [stats, setStats] = useState<SlackStats | null>(null)
