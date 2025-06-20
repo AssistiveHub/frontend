@@ -1,229 +1,357 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { integrationApi } from '@/utils/api'
+
 interface NotionContentProps {
     serviceId: string
     serviceName: string
     config: Record<string, string>
 }
 
-export default function NotionContent({ serviceName, config }: NotionContentProps) {
+interface NotionIntegration {
+    id: number
+    workspaceName: string
+    notionUserName: string
+    isActive: boolean
+    connectedAt: string
+    lastSyncAt: string
+}
+
+interface NotionStats {
+    totalIntegrations: number
+    activeIntegrations: number
+    inactiveIntegrations: number
+}
+
+export default function NotionContent({ serviceName }: NotionContentProps) {
+    const [integrations, setIntegrations] = useState<NotionIntegration[]>([])
+    const [stats, setStats] = useState<NotionStats | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [showManualSetup, setShowManualSetup] = useState(false)
+    const [manualToken, setManualToken] = useState('')
+    const [tokenValidating, setTokenValidating] = useState(false)
+
+    useEffect(() => {
+        loadNotionData()
+    }, [])
+
+    const loadNotionData = async () => {
+        try {
+            setLoading(true)
+            setError(null)
+
+            const [integrationsResult, statsResult] = await Promise.all([
+                integrationApi.notion.getIntegrations(),
+                integrationApi.notion.getStats()
+            ])
+
+            if (integrationsResult.success) {
+                setIntegrations(integrationsResult.data || [])
+            }
+
+            if (statsResult.success) {
+                setStats(statsResult.data)
+            }
+
+        } catch (err: unknown) {
+            const error = err as Error
+            setError(error.message || '데이터를 불러오는 중 오류가 발생했습니다.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleOAuthConnect = async () => {
+        try {
+            const result = await integrationApi.notion.getAuthUrl()
+            if (result.success && result.authUrl) {
+                window.location.href = result.authUrl
+            }
+        } catch (err: unknown) {
+            const error = err as Error
+            setError(error.message || 'OAuth 연동 중 오류가 발생했습니다.')
+        }
+    }
+
+    const handleManualConnect = async () => {
+        if (!manualToken.trim()) {
+            setError('토큰을 입력해주세요.')
+            return
+        }
+
+        try {
+            setTokenValidating(true)
+            setError(null)
+
+            const validateResult = await integrationApi.notion.validateToken(manualToken)
+            
+            if (!validateResult.success || !validateResult.isValid) {
+                setError('유효하지 않은 토큰입니다.')
+                return
+            }
+
+            const setupData = {
+                token: manualToken,
+                serviceName: serviceName || 'Notion Integration'
+            }
+
+            const result = await integrationApi.notion.createManualSetup(setupData)
+            
+            if (result.success) {
+                setShowManualSetup(false)
+                setManualToken('')
+                await loadNotionData()
+            }
+
+        } catch (err: unknown) {
+            const error = err as Error
+            setError(error.message || '수동 연동 중 오류가 발생했습니다.')
+        } finally {
+            setTokenValidating(false)
+        }
+    }
+
+    const handleToggleIntegration = async (integrationId: number) => {
+        try {
+            const result = await integrationApi.notion.toggle(integrationId)
+            if (result.success) {
+                await loadNotionData()
+            }
+        } catch (err: unknown) {
+            const error = err as Error
+            setError(error.message || '연동 상태 변경 중 오류가 발생했습니다.')
+        }
+    }
+
+    const handleDisconnect = async (integrationId: number) => {
+        if (!confirm('정말로 이 연동을 해제하시겠습니까?')) {
+            return
+        }
+
+        try {
+            const result = await integrationApi.notion.disconnect(integrationId)
+            if (result.success) {
+                await loadNotionData()
+            }
+        } catch (err: unknown) {
+            const error = err as Error
+            setError(error.message || '연동 해제 중 오류가 발생했습니다.')
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="flex-1 overflow-auto">
+                <div className="p-6">
+                    <div className="flex items-center justify-center h-64">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     return (
-        <div className="p-6">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">노션 연동 - {serviceName}</h1>
-                <p className="text-gray-600">노션 페이지 관리 및 문서 작업</p>
-                {config.database && (
-                    <p className="text-sm text-gray-500">기본 데이터베이스: {config.database}</p>
+        <div className="flex-1 overflow-auto">
+            <div className="p-6">
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2 flex items-center">
+                        <span className="text-2xl mr-3">📝</span>
+                        {serviceName}
+                    </h1>
+                    <p className="text-gray-600">노션 워크스페이스와의 연동을 관리하고 문서 활동을 추적하세요</p>
+                </div>
+
+                {/* 오류 메시지 */}
+                {error && (
+                    <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex">
+                            <div className="text-red-400">
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-sm text-red-800">{error}</p>
+                                <button 
+                                    onClick={() => setError(null)}
+                                    className="mt-2 text-sm text-red-600 hover:text-red-500"
+                                >
+                                    닫기
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                {/* 최근 업데이트된 페이지 */}
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <span className="text-orange-600 mr-2">📝</span>
-                        최근 업데이트된 페이지
-                    </h3>
-
-                    <div className="space-y-3">
-                        <div className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                {/* 통계 카드 */}
+                {stats && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-900">프로젝트 기획서</span>
-                                <span className="text-xs text-gray-500">2시간 전</span>
+                                <h3 className="text-sm font-medium text-gray-500">전체 연동</h3>
+                                <span className="text-blue-600">📊</span>
                             </div>
-                            <p className="text-xs text-gray-600 mb-2">AssistiveHub 프로젝트의 전체 기획 및 요구사항 정의</p>
-                            <div className="flex items-center space-x-2">
-                                <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">기획</span>
-                                <span className="text-xs text-gray-500">마지막 편집: 김기획</span>
-                            </div>
+                            <div className="text-xl font-bold text-gray-900">{stats.totalIntegrations}</div>
+                            <p className="text-xs text-gray-500">워크스페이스</p>
                         </div>
 
-                        <div className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-900">API 문서</span>
-                                <span className="text-xs text-gray-500">1일 전</span>
+                                <h3 className="text-sm font-medium text-gray-500">활성 연동</h3>
+                                <span className="text-green-600">✅</span>
                             </div>
-                            <p className="text-xs text-gray-600 mb-2">백엔드 API 엔드포인트 및 사용법 가이드</p>
-                            <div className="flex items-center space-x-2">
-                                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">개발</span>
-                                <span className="text-xs text-gray-500">마지막 편집: 박개발</span>
-                            </div>
+                            <div className="text-xl font-bold text-gray-900">{stats.activeIntegrations}</div>
+                            <p className="text-xs text-green-600">정상 작동</p>
                         </div>
 
-                        <div className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-900">회의록 - 2024.01.15</span>
-                                <span className="text-xs text-gray-500">3일 전</span>
+                                <h3 className="text-sm font-medium text-gray-500">비활성 연동</h3>
+                                <span className="text-gray-600">⏸️</span>
                             </div>
-                            <p className="text-xs text-gray-600 mb-2">주간 스프린트 리뷰 및 다음 주 계획</p>
-                            <div className="flex items-center space-x-2">
-                                <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">회의</span>
-                                <span className="text-xs text-gray-500">마지막 편집: 이팀장</span>
-                            </div>
+                            <div className="text-xl font-bold text-gray-900">{stats.inactiveIntegrations}</div>
+                            <p className="text-xs text-gray-500">일시 중지</p>
                         </div>
                     </div>
+                )}
 
-                    <button className="mt-4 w-full py-2 px-4 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors">
-                        모든 페이지 보기
-                    </button>
-                </div>
-
-                {/* 작업 진행 상황 */}
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <span className="text-blue-600 mr-2">📊</span>
-                        작업 진행 상황
-                    </h3>
-
-                    <div className="space-y-4">
-                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-blue-800">진행 중인 프로젝트</span>
-                                <span className="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded">3개</span>
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-blue-700">AssistiveHub 개발</span>
-                                    <span className="text-blue-600 font-medium">75%</span>
-                                </div>
-                                <div className="w-full bg-blue-200 rounded-full h-2">
-                                    <div className="bg-blue-600 h-2 rounded-full" style={{ width: '75%' }}></div>
-                                </div>
-                            </div>
+                {/* 연동 추가 버튼 */}
+                <div className="mb-6">
+                    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">새 노션 워크스페이스 연동</h3>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <button
+                                onClick={handleOAuthConnect}
+                                className="flex-1 flex items-center justify-center px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                            >
+                                <span className="mr-2">🔗</span>
+                                OAuth로 연동하기
+                            </button>
+                            <button
+                                onClick={() => setShowManualSetup(!showManualSetup)}
+                                className="flex-1 flex items-center justify-center px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                            >
+                                <span className="mr-2">⚙️</span>
+                                수동으로 연동하기
+                            </button>
                         </div>
 
-                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-green-800">완료된 문서</span>
-                                <span className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded">12개</span>
+                        {/* 수동 연동 폼 */}
+                        {showManualSetup && (
+                            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                                <h4 className="text-md font-medium text-gray-900 mb-3">노션 Integration Token으로 연동</h4>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            노션 Integration Token
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={manualToken}
+                                            onChange={(e) => setManualToken(e.target.value)}
+                                            placeholder="secret_your-integration-token"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            노션 Integration 설정에서 Internal Integration Token을 복사하여 입력하세요
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={handleManualConnect}
+                                            disabled={tokenValidating || !manualToken.trim()}
+                                            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:bg-gray-400 transition-colors"
+                                        >
+                                            {tokenValidating ? '검증 중...' : '연동하기'}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowManualSetup(false)
+                                                setManualToken('')
+                                                setError(null)
+                                            }}
+                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                                        >
+                                            취소
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="space-y-1 text-xs text-green-700">
-                                <div className="flex justify-between">
-                                    <span>기술 스펙 문서</span>
-                                    <span className="font-medium">✓</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>사용자 가이드</span>
-                                    <span className="font-medium">✓</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>테스트 계획서</span>
-                                    <span className="font-medium">✓</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-yellow-800">검토 대기</span>
-                                <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">2개</span>
-                            </div>
-                            <div className="space-y-1 text-xs text-yellow-700">
-                                <div className="flex justify-between">
-                                    <span>배포 가이드</span>
-                                    <span className="font-medium">대기</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>보안 정책 문서</span>
-                                    <span className="font-medium">대기</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 문서 템플릿 */}
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <span className="text-indigo-600 mr-2">📄</span>
-                        문서 템플릿
-                    </h3>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 transition-colors">
-                            <div className="text-2xl mb-2">📋</div>
-                            <div className="text-sm font-medium text-gray-900">회의록</div>
-                            <div className="text-xs text-gray-500">새 회의록 작성</div>
-                        </button>
-
-                        <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 transition-colors">
-                            <div className="text-2xl mb-2">📊</div>
-                            <div className="text-sm font-medium text-gray-900">프로젝트 계획</div>
-                            <div className="text-xs text-gray-500">프로젝트 기획서</div>
-                        </button>
-
-                        <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 transition-colors">
-                            <div className="text-2xl mb-2">🔧</div>
-                            <div className="text-sm font-medium text-gray-900">기술 스펙</div>
-                            <div className="text-xs text-gray-500">기술 문서 작성</div>
-                        </button>
-
-                        <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 transition-colors">
-                            <div className="text-2xl mb-2">📝</div>
-                            <div className="text-sm font-medium text-gray-900">일반 문서</div>
-                            <div className="text-xs text-gray-500">빈 문서 생성</div>
-                        </button>
+                        )}
                     </div>
                 </div>
 
-                {/* 최근 활동 및 통계 */}
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <span className="text-green-600 mr-2">📈</span>
-                        활동 통계
-                    </h3>
-
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div className="flex items-center">
-                                <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center mr-3">
-                                    <span className="text-orange-600 text-sm">📝</span>
-                                </div>
-                                <div>
-                                    <div className="text-sm font-medium text-gray-900">이번 주 작성</div>
-                                    <div className="text-xs text-gray-500">문서 및 페이지</div>
-                                </div>
-                            </div>
-                            <div className="text-xl font-bold text-gray-900">8</div>
-                        </div>
-
-                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div className="flex items-center">
-                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                                    <span className="text-blue-600 text-sm">👁️</span>
-                                </div>
-                                <div>
-                                    <div className="text-sm font-medium text-gray-900">페이지 조회</div>
-                                    <div className="text-xs text-gray-500">이번 주 총 조회수</div>
-                                </div>
-                            </div>
-                            <div className="text-xl font-bold text-gray-900">156</div>
-                        </div>
-
-                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div className="flex items-center">
-                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                                    <span className="text-green-600 text-sm">✅</span>
-                                </div>
-                                <div>
-                                    <div className="text-sm font-medium text-gray-900">완료된 작업</div>
-                                    <div className="text-xs text-gray-500">체크리스트 항목</div>
-                                </div>
-                            </div>
-                            <div className="text-xl font-bold text-gray-900">24</div>
-                        </div>
-
-                        <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-                            <div className="text-sm font-medium text-indigo-800 mb-1">생산성 지수</div>
-                            <div className="flex items-center justify-between">
-                                <div className="text-xs text-indigo-600">이번 주 평균</div>
-                                <div className="text-lg font-bold text-indigo-700">92%</div>
-                            </div>
-                            <div className="w-full bg-indigo-200 rounded-full h-2 mt-2">
-                                <div className="bg-indigo-600 h-2 rounded-full" style={{ width: '92%' }}></div>
-                            </div>
-                        </div>
+                {/* 연동된 워크스페이스 목록 */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="p-6 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">연동된 워크스페이스</h3>
+                        <p className="text-sm text-gray-600 mt-1">현재 연결된 노션 워크스페이스 목록입니다</p>
                     </div>
+
+                    {integrations.length === 0 ? (
+                        <div className="p-8 text-center">
+                            <div className="text-4xl mb-4">📝</div>
+                            <h4 className="text-lg font-medium text-gray-900 mb-2">연동된 워크스페이스가 없습니다</h4>
+                            <p className="text-gray-600 mb-4">위의 버튼을 사용하여 노션 워크스페이스를 연동해보세요</p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-gray-200">
+                            {integrations.map((integration) => (
+                                <div key={integration.id} className="p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-4">
+                                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                                                <span className="text-gray-600 text-xl">📝</span>
+                                            </div>
+                                            <div>
+                                                <h4 className="text-lg font-medium text-gray-900">{integration.workspaceName}</h4>
+                                                <p className="text-sm text-gray-600">@{integration.notionUserName}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    연결됨: {new Date(integration.connectedAt).toLocaleDateString('ko-KR')}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center space-x-3">
+                                            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                                integration.isActive 
+                                                    ? 'bg-green-100 text-green-800' 
+                                                    : 'bg-gray-100 text-gray-800'
+                                            }`}>
+                                                {integration.isActive ? '활성' : '비활성'}
+                                            </div>
+                                            
+                                            <button
+                                                onClick={() => handleToggleIntegration(integration.id)}
+                                                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                                                    integration.isActive
+                                                        ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                                                        : 'bg-green-100 text-green-800 hover:bg-green-200'
+                                                }`}
+                                            >
+                                                {integration.isActive ? '일시정지' : '활성화'}
+                                            </button>
+
+                                            <button
+                                                onClick={() => handleDisconnect(integration.id)}
+                                                className="px-3 py-1 bg-red-100 text-red-800 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
+                                            >
+                                                연동해제
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* 마지막 동기화 시간 */}
+                                    <div className="mt-4 text-sm text-gray-500">
+                                        마지막 동기화: {integration.lastSyncAt ? new Date(integration.lastSyncAt).toLocaleString('ko-KR') : '없음'}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

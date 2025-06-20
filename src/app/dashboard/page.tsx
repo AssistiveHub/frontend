@@ -6,6 +6,7 @@ import Sidebar from '@/components/Sidebar'
 import MainContent from '@/components/MainContent'
 import ServiceSetupModal from '@/components/ServiceSetupModal'
 import { useAuthContext } from '@/contexts/AuthContext'
+import { integrationApi } from '@/utils/api'
 import Image from 'next/image'
 
 interface ConnectedService {
@@ -38,19 +39,62 @@ export default function Dashboard() {
             return
         }
 
-        // 로그인된 경우 연결된 서비스 정보 로드
+        // 로그인된 경우 실제 연결된 서비스 정보 로드
         if (isLoggedIn) {
-            const savedServices = localStorage.getItem('connectedServices')
-            if (savedServices) {
-                try {
-                    setConnectedServices(JSON.parse(savedServices))
-                } catch (error) {
-                    console.error('Failed to parse connected services:', error)
-                    localStorage.removeItem('connectedServices')
-                }
-            }
+            loadConnectedServices()
         }
     }, [isLoading, isLoggedIn, router])
+
+    const loadConnectedServices = async () => {
+        try {
+            // 백엔드에서 실제 연동된 서비스들 조회
+            const [slackResult, notionResult, githubResult] = await Promise.all([
+                integrationApi.slack.getIntegrations(true), // 활성화된 것만
+                integrationApi.notion.getIntegrations(true),
+                integrationApi.github.getIntegrations(true)
+            ])
+
+            const services: ConnectedService[] = []
+
+            // 슬랙 연동 추가
+            if (slackResult.success && slackResult.data) {
+                slackResult.data.forEach((integration: Record<string, unknown>) => {
+                    services.push({
+                        id: `slack-${integration.id}`,
+                        type: 'slack',
+                        name: (integration.serviceName as string) || (integration.teamName as string) || '슬랙'
+                    })
+                })
+            }
+
+            // 노션 연동 추가
+            if (notionResult.success && notionResult.data) {
+                notionResult.data.forEach((integration: Record<string, unknown>) => {
+                    services.push({
+                        id: `notion-${integration.id}`,
+                        type: 'notion',
+                        name: (integration.serviceName as string) || (integration.workspaceName as string) || '노션'
+                    })
+                })
+            }
+
+            // 깃허브 연동 추가
+            if (githubResult.success && githubResult.data) {
+                githubResult.data.forEach((integration: Record<string, unknown>) => {
+                    services.push({
+                        id: `git-${integration.id}`,
+                        type: 'git',
+                        name: (integration.serviceName as string) || (integration.repositoryName as string) || '깃허브'
+                    })
+                })
+            }
+
+            setConnectedServices(services)
+
+        } catch (error) {
+            console.error('Failed to load connected services:', error)
+        }
+    }
 
 
 
@@ -71,26 +115,17 @@ export default function Dashboard() {
         setShowMobileDropdown(false)
     }
 
-    const handleServiceConnect = (serviceType: string, config: Record<string, string>) => {
-        // 고유한 ID 생성 (서비스타입-타임스탬프)
-        const serviceId = `${serviceType}-${Date.now()}`
-        const serviceName = config.name || `${getServiceLabel(serviceType)} ${connectedServices.filter(s => s.type === serviceType).length + 1}`
-
-        const newService: ConnectedService = {
-            id: serviceId,
-            type: serviceType,
-            name: serviceName
-        }
-
-        const newConnectedServices = [...connectedServices, newService]
-        setConnectedServices(newConnectedServices)
-
-        // localStorage에 저장
-        localStorage.setItem('connectedServices', JSON.stringify(newConnectedServices))
-        localStorage.setItem(`${serviceId}_config`, JSON.stringify(config))
-
+    const handleServiceConnect = async (serviceType: string, _config: Record<string, string>) => {
+        // 연동 완료 후 서비스 목록 새로고침
+        await loadConnectedServices()
+        
         setShowServiceSetup(null)
-        setSelectedMenu(serviceId) // 새로 추가된 서비스로 자동 이동
+        
+        // 새로 추가된 서비스로 자동 이동 (마지막으로 추가된 해당 타입의 서비스)
+        const newServices = connectedServices.filter(s => s.type === serviceType)
+        if (newServices.length > 0) {
+            setSelectedMenu(newServices[newServices.length - 1].id)
+        }
     }
 
     const handleServiceSetupClose = () => {
@@ -110,14 +145,7 @@ export default function Dashboard() {
         setSidebarCollapsed(!sidebarCollapsed)
     }
 
-    const getServiceLabel = (serviceType: string) => {
-        const labels: Record<string, string> = {
-            slack: '슬랙',
-            notion: '노션',
-            git: '깃'
-        }
-        return labels[serviceType] || serviceType
-    }
+
 
     const handleSettingsClick = () => {
         router.push('/settings')

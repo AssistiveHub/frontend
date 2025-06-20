@@ -1,164 +1,386 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { integrationApi } from '@/utils/api'
+
 interface SlackContentProps {
     serviceId: string
     serviceName: string
     config: Record<string, string>
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface SlackIntegration {
+    id: number
+    teamName: string
+    slackUserName: string
+    isActive: boolean
+    connectedAt: string
+    lastSyncAt: string
+    enableMentions: boolean
+    enableDirectMessages: boolean
+    enableChannelMessages: boolean
+    enableThreadReplies: boolean
+}
+
+interface SlackStats {
+    totalIntegrations: number
+    activeIntegrations: number
+    inactiveIntegrations: number
+}
+
 export default function SlackContent({ serviceId, serviceName, config }: SlackContentProps) {
+    const [integrations, setIntegrations] = useState<SlackIntegration[]>([])
+    const [stats, setStats] = useState<SlackStats | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [showManualSetup, setShowManualSetup] = useState(false)
+    const [manualToken, setManualToken] = useState('')
+    const [tokenValidating, setTokenValidating] = useState(false)
+
+    useEffect(() => {
+        loadSlackData()
+    }, [])
+
+    const loadSlackData = async () => {
+        try {
+            setLoading(true)
+            setError(null)
+
+            // 슬랙 통합 목록과 통계 동시 로드
+            const [integrationsResult, statsResult] = await Promise.all([
+                integrationApi.slack.getIntegrations(),
+                integrationApi.slack.getStats()
+            ])
+
+            if (integrationsResult.success) {
+                setIntegrations(integrationsResult.data || [])
+            }
+
+            if (statsResult.success) {
+                setStats(statsResult.data)
+            }
+
+        } catch (err: any) {
+            setError(err.message || '데이터를 불러오는 중 오류가 발생했습니다.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleOAuthConnect = async () => {
+        try {
+            const result = await integrationApi.slack.getAuthUrl()
+            if (result.success && result.authUrl) {
+                window.location.href = result.authUrl
+            }
+        } catch (err: any) {
+            setError(err.message || 'OAuth 연동 중 오류가 발생했습니다.')
+        }
+    }
+
+    const handleManualConnect = async () => {
+        if (!manualToken.trim()) {
+            setError('토큰을 입력해주세요.')
+            return
+        }
+
+        try {
+            setTokenValidating(true)
+            setError(null)
+
+            // 토큰 유효성 검증
+            const validateResult = await integrationApi.slack.validateToken(manualToken)
+            
+            if (!validateResult.success || !validateResult.isValid) {
+                setError('유효하지 않은 토큰입니다.')
+                return
+            }
+
+            // 수동 연동 생성
+            const setupData = {
+                token: manualToken,
+                serviceName: serviceName || 'Slack Integration',
+                enableMentions: true,
+                enableDirectMessages: true,
+                enableChannelMessages: false,
+                enableThreadReplies: true
+            }
+
+            const result = await integrationApi.slack.createManualSetup(setupData)
+            
+            if (result.success) {
+                setShowManualSetup(false)
+                setManualToken('')
+                await loadSlackData() // 데이터 새로고침
+            }
+
+        } catch (err: any) {
+            setError(err.message || '수동 연동 중 오류가 발생했습니다.')
+        } finally {
+            setTokenValidating(false)
+        }
+    }
+
+    const handleToggleIntegration = async (integrationId: number) => {
+        try {
+            const result = await integrationApi.slack.toggle(integrationId)
+            if (result.success) {
+                await loadSlackData() // 데이터 새로고침
+            }
+        } catch (err: any) {
+            setError(err.message || '연동 상태 변경 중 오류가 발생했습니다.')
+        }
+    }
+
+    const handleDisconnect = async (integrationId: number) => {
+        if (!confirm('정말로 이 연동을 해제하시겠습니까?')) {
+            return
+        }
+
+        try {
+            const result = await integrationApi.slack.disconnect(integrationId)
+            if (result.success) {
+                await loadSlackData() // 데이터 새로고침
+            }
+        } catch (err: any) {
+            setError(err.message || '연동 해제 중 오류가 발생했습니다.')
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="flex-1 overflow-auto">
+                <div className="p-6">
+                    <div className="flex items-center justify-center h-64">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     return (
-        <div className="p-6">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">슬랙 연동 - {serviceName}</h1>
-                <p className="text-gray-600">슬랙 메시지 분석 및 작업 관리</p>
-                {config.channel && (
-                    <p className="text-sm text-gray-500">기본 채널: {config.channel}</p>
+        <div className="flex-1 overflow-auto">
+            <div className="p-6">
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2 flex items-center">
+                        <span className="text-2xl mr-3">💬</span>
+                        {serviceName}
+                    </h1>
+                    <p className="text-gray-600">슬랙 워크스페이스와의 연동을 관리하고 활동을 추적하세요</p>
+                </div>
+
+                {/* 오류 메시지 */}
+                {error && (
+                    <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex">
+                            <div className="text-red-400">
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-sm text-red-800">{error}</p>
+                                <button 
+                                    onClick={() => setError(null)}
+                                    className="mt-2 text-sm text-red-600 hover:text-red-500"
+                                >
+                                    닫기
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* 태그 쓰레드 분석 */}
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <span className="text-blue-600 mr-2">🏷️</span>
-                        태그 쓰레드 분석
-                    </h3>
-                    <div className="space-y-3">
-                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                {/* 통계 카드 */}
+                {stats && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-red-700">@urgent</span>
-                                <span className="text-xs text-red-600">3개</span>
+                                <h3 className="text-sm font-medium text-gray-500">전체 연동</h3>
+                                <span className="text-blue-600">📊</span>
                             </div>
-                            <p className="text-xs text-red-600">긴급 처리 필요한 메시지</p>
+                            <div className="text-xl font-bold text-gray-900">{stats.totalIntegrations}</div>
+                            <p className="text-xs text-gray-500">워크스페이스</p>
                         </div>
 
-                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-yellow-700">@review</span>
-                                <span className="text-xs text-yellow-600">5개</span>
+                                <h3 className="text-sm font-medium text-gray-500">활성 연동</h3>
+                                <span className="text-green-600">✅</span>
                             </div>
-                            <p className="text-xs text-yellow-600">리뷰 요청 메시지</p>
+                            <div className="text-xl font-bold text-gray-900">{stats.activeIntegrations}</div>
+                            <p className="text-xs text-green-600">정상 작동</p>
                         </div>
 
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-blue-700">@question</span>
-                                <span className="text-xs text-blue-600">2개</span>
+                                <h3 className="text-sm font-medium text-gray-500">비활성 연동</h3>
+                                <span className="text-gray-600">⏸️</span>
                             </div>
-                            <p className="text-xs text-blue-600">질문 관련 메시지</p>
+                            <div className="text-xl font-bold text-gray-900">{stats.inactiveIntegrations}</div>
+                            <p className="text-xs text-gray-500">일시 중지</p>
                         </div>
                     </div>
+                )}
 
-                    <button className="mt-4 w-full py-2 px-4 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
-                        전체 분석 보기
-                    </button>
+                {/* 연동 추가 버튼 */}
+                <div className="mb-6">
+                    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">새 슬랙 워크스페이스 연동</h3>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <button
+                                onClick={handleOAuthConnect}
+                                className="flex-1 flex items-center justify-center px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                            >
+                                <span className="mr-2">🔗</span>
+                                OAuth로 연동하기
+                            </button>
+                            <button
+                                onClick={() => setShowManualSetup(!showManualSetup)}
+                                className="flex-1 flex items-center justify-center px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                            >
+                                <span className="mr-2">⚙️</span>
+                                수동으로 연동하기
+                            </button>
+                        </div>
+
+                        {/* 수동 연동 폼 */}
+                        {showManualSetup && (
+                            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                                <h4 className="text-md font-medium text-gray-900 mb-3">슬랙 토큰으로 연동</h4>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            슬랙 Bot Token (xoxb-로 시작)
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={manualToken}
+                                            onChange={(e) => setManualToken(e.target.value)}
+                                            placeholder="xoxb-your-bot-token"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            슬랙 앱 설정에서 Bot User OAuth Token을 복사하여 입력하세요
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={handleManualConnect}
+                                            disabled={tokenValidating || !manualToken.trim()}
+                                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors"
+                                        >
+                                            {tokenValidating ? '검증 중...' : '연동하기'}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowManualSetup(false)
+                                                setManualToken('')
+                                                setError(null)
+                                            }}
+                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                                        >
+                                            취소
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* 해야할 일과 체크사항 */}
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <span className="text-green-600 mr-2">✅</span>
-                        체크사항 리스트
-                    </h3>
-                    <div className="space-y-3">
-                        <div className="p-3 border border-gray-200 rounded-lg">
-                            <h4 className="text-sm font-medium text-gray-900 mb-2">API 개발 완료</h4>
-                            <div className="space-y-2 text-xs text-gray-600">
-                                <div className="flex items-center">
-                                    <input type="checkbox" className="w-3 h-3 mr-2" defaultChecked />
-                                    <span className="line-through">기본 CRUD 구현</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <input type="checkbox" className="w-3 h-3 mr-2" />
-                                    <span>에러 핸들링 추가</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <input type="checkbox" className="w-3 h-3 mr-2" />
-                                    <span>테스트 코드 작성</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-3 border border-gray-200 rounded-lg">
-                            <h4 className="text-sm font-medium text-gray-900 mb-2">코드 리뷰</h4>
-                            <div className="space-y-2 text-xs text-gray-600">
-                                <div className="flex items-center">
-                                    <input type="checkbox" className="w-3 h-3 mr-2" />
-                                    <span>PR #123 리뷰</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <input type="checkbox" className="w-3 h-3 mr-2" />
-                                    <span>보안 검토</span>
-                                </div>
-                            </div>
-                        </div>
+                {/* 연동된 워크스페이스 목록 */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="p-6 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">연동된 워크스페이스</h3>
+                        <p className="text-sm text-gray-600 mt-1">현재 연결된 슬랙 워크스페이스 목록입니다</p>
                     </div>
 
-                    <button className="mt-4 w-full py-2 px-4 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors">
-                        + 새 체크리스트
-                    </button>
-                </div>
-
-                {/* 당일 작업일지 */}
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        <span className="text-purple-600 mr-2">📝</span>
-                        당일 작업일지
-                    </h3>
-
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            오늘 날짜: {new Date().toLocaleDateString('ko-KR')}
-                        </label>
-                        <textarea
-                            className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                            placeholder="오늘 한 일을 자유롭게 작성해주세요..."
-                            defaultValue="- 슬랙 API 연동 개발&#10;- 태그 분석 기능 구현&#10;- 팀 회의 참석 (프로젝트 진행상황 공유)&#10;- 코드 리뷰 2건 완료"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <button className="w-full py-2 px-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
-                            작업일지 저장
-                        </button>
-                        <button className="w-full py-2 px-4 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors">
-                            이전 일지 보기
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* 최근 슬랙 메시지 */}
-            <div className="mt-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">최근 멘션된 메시지</h3>
-                <div className="space-y-4">
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-gray-900">@김개발</span>
-                            <span className="text-xs text-gray-500">#frontend-team</span>
+                    {integrations.length === 0 ? (
+                        <div className="p-8 text-center">
+                            <div className="text-4xl mb-4">💬</div>
+                            <h4 className="text-lg font-medium text-gray-900 mb-2">연동된 워크스페이스가 없습니다</h4>
+                            <p className="text-gray-600 mb-4">위의 버튼을 사용하여 슬랙 워크스페이스를 연동해보세요</p>
                         </div>
-                        <p className="text-sm text-gray-700 mb-2">
-                            @username API 문서 확인 부탁드립니다. 내일까지 리뷰 완료해주세요! 🙏
-                        </p>
-                        <div className="flex items-center space-x-2">
-                            <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded">urgent</span>
-                            <span className="text-xs text-gray-500">2시간 전</span>
-                        </div>
-                    </div>
+                    ) : (
+                        <div className="divide-y divide-gray-200">
+                            {integrations.map((integration) => (
+                                <div key={integration.id} className="p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-4">
+                                            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                                                <span className="text-purple-600 text-xl">💬</span>
+                                            </div>
+                                            <div>
+                                                <h4 className="text-lg font-medium text-gray-900">{integration.teamName}</h4>
+                                                <p className="text-sm text-gray-600">@{integration.slackUserName}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    연결됨: {new Date(integration.connectedAt).toLocaleDateString('ko-KR')}
+                                                </p>
+                                            </div>
+                                        </div>
 
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-gray-900">@박디자이너</span>
-                            <span className="text-xs text-gray-500">#design</span>
+                                        <div className="flex items-center space-x-3">
+                                            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                                integration.isActive 
+                                                    ? 'bg-green-100 text-green-800' 
+                                                    : 'bg-gray-100 text-gray-800'
+                                            }`}>
+                                                {integration.isActive ? '활성' : '비활성'}
+                                            </div>
+                                            
+                                            <button
+                                                onClick={() => handleToggleIntegration(integration.id)}
+                                                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                                                    integration.isActive
+                                                        ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                                                        : 'bg-green-100 text-green-800 hover:bg-green-200'
+                                                }`}
+                                            >
+                                                {integration.isActive ? '일시정지' : '활성화'}
+                                            </button>
+
+                                            <button
+                                                onClick={() => handleDisconnect(integration.id)}
+                                                className="px-3 py-1 bg-red-100 text-red-800 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
+                                            >
+                                                연동해제
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* 알림 설정 표시 */}
+                                    <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        <div className={`flex items-center space-x-2 text-sm ${
+                                            integration.enableMentions ? 'text-green-700' : 'text-gray-500'
+                                        }`}>
+                                            <span>{integration.enableMentions ? '✅' : '❌'}</span>
+                                            <span>멘션 알림</span>
+                                        </div>
+                                        <div className={`flex items-center space-x-2 text-sm ${
+                                            integration.enableDirectMessages ? 'text-green-700' : 'text-gray-500'
+                                        }`}>
+                                            <span>{integration.enableDirectMessages ? '✅' : '❌'}</span>
+                                            <span>DM 알림</span>
+                                        </div>
+                                        <div className={`flex items-center space-x-2 text-sm ${
+                                            integration.enableChannelMessages ? 'text-green-700' : 'text-gray-500'
+                                        }`}>
+                                            <span>{integration.enableChannelMessages ? '✅' : '❌'}</span>
+                                            <span>채널 메시지</span>
+                                        </div>
+                                        <div className={`flex items-center space-x-2 text-sm ${
+                                            integration.enableThreadReplies ? 'text-green-700' : 'text-gray-500'
+                                        }`}>
+                                            <span>{integration.enableThreadReplies ? '✅' : '❌'}</span>
+                                            <span>스레드 답글</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        <p className="text-sm text-gray-700 mb-2">
-                            @username 새로운 컴포넌트 디자인 완료했어요. 확인해보시고 피드백 주세요!
-                        </p>
-                        <div className="flex items-center space-x-2">
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">review</span>
-                            <span className="text-xs text-gray-500">4시간 전</span>
-                        </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>
