@@ -115,10 +115,10 @@ export default function Dashboard() {
         setShowMobileDropdown(false)
     }
 
-    const handleServiceConnect = async (serviceType: string, _config: Record<string, string>) => {
+        const handleServiceConnect = async (serviceType: string) => {
         // 연동 완료 후 서비스 목록 새로고침
         await loadConnectedServices()
-        
+
         setShowServiceSetup(null)
         
         // 새로 추가된 서비스로 자동 이동 (마지막으로 추가된 해당 타입의 서비스)

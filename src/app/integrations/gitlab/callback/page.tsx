@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { integrationApi } from '@/utils/api'
 
-export default function GitLabCallback() {
+function GitLabCallbackContent() {
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
     const [message, setMessage] = useState('')
     const router = useRouter()
@@ -103,5 +103,17 @@ export default function GitLabCallback() {
                 )}
             </div>
         </div>
+    )
+}
+
+export default function GitLabCallback() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+            </div>
+        }>
+            <GitLabCallbackContent />
+        </Suspense>
     )
 } 

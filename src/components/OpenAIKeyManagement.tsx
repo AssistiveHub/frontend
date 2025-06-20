@@ -36,6 +36,7 @@ export default function OpenAIKeyManagement() {
 
     useEffect(() => {
         fetchKeys()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const fetchKeys = async () => {
