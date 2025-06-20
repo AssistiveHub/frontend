@@ -1,9 +1,19 @@
-export default function SlackContent() {
+interface SlackContentProps {
+    serviceId: string
+    serviceName: string
+    config: Record<string, string>
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function SlackContent({ serviceId, serviceName, config }: SlackContentProps) {
     return (
         <div className="p-6">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">슬랙 연동</h1>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">슬랙 연동 - {serviceName}</h1>
                 <p className="text-gray-600">슬랙 메시지 분석 및 작업 관리</p>
+                {config.channel && (
+                    <p className="text-sm text-gray-500">기본 채널: {config.channel}</p>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

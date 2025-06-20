@@ -1,8 +1,15 @@
-export default function GitContent() {
+interface GitContentProps {
+    serviceId: string;
+    serviceName: string;
+    config: Record<string, unknown>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function GitContent({ serviceId, serviceName, config }: GitContentProps) {
     return (
         <div className="p-6">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">깃 연동</h1>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">{serviceName} - 깃 연동</h1>
                 <p className="text-gray-600">커밋 기반 작업 분석 및 성과 관리</p>
             </div>
 

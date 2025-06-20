@@ -1,9 +1,18 @@
-export default function NotionContent() {
+interface NotionContentProps {
+    serviceId: string
+    serviceName: string
+    config: Record<string, string>
+}
+
+export default function NotionContent({ serviceName, config }: NotionContentProps) {
     return (
         <div className="p-6">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">노션 연동</h1>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">노션 연동 - {serviceName}</h1>
                 <p className="text-gray-600">노션 페이지 관리 및 문서 작업</p>
+                {config.database && (
+                    <p className="text-sm text-gray-500">기본 데이터베이스: {config.database}</p>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
