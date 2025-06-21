@@ -35,7 +35,6 @@ export default function Dashboard() {
     const [showMobileDropdown, setShowMobileDropdown] = useState(false)
 
     const router = useRouter()
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
     const loadConnectedServices = useCallback(async () => {
         try {
@@ -50,7 +49,7 @@ export default function Dashboard() {
             const services: ConnectedService[] = []
 
             // 1. 기존 통합 연동 API로 Slack, Notion 등 조회
-            const integrationResponse = await fetch(`${baseUrl}/api/integrations?activeOnly=true`, {
+            const integrationResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/integrations?activeOnly=true`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -101,7 +100,7 @@ export default function Dashboard() {
             }
 
             // 2. 새로운 GitHub 리포지토리 API로 리포지토리별 조회
-            const githubRepoResponse = await fetch(`${baseUrl}/api/repositories/github`, {
+            const githubRepoResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/repositories/github`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -131,7 +130,7 @@ export default function Dashboard() {
         } catch (error) {
             console.error('Failed to load connected services:', error)
         }
-    }, [baseUrl, logout, router])
+    }, [logout, router])
 
     useEffect(() => {
         // 로딩이 완료되고 로그인되지 않은 경우 홈으로 리다이렉트
