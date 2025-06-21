@@ -365,5 +365,33 @@ export const integrationApi = {
     getStats: async (): Promise<any> => {
       return api.get<any>('/api/integrations/gitlab/stats')
     }
+  },
+
+  // GitHub Repository APIs (새로운 리포지토리 단위 관리)
+  githubRepository: {
+    // 사용자의 GitHub 리포지토리 목록 조회
+    getRepositories: async (): Promise<any> => {
+      return api.get<any>('/api/repositories/github')
+    },
+
+    // 특정 GitHub 리포지토리 조회
+    getRepository: async (repositoryId: number): Promise<any> => {
+      return api.get<any>(`/api/repositories/github/${repositoryId}`)
+    },
+
+    // GitHub 리포지토리 추가
+    addRepository: async (repositoryData: any): Promise<any> => {
+      return api.post<any>('/api/repositories/github', repositoryData)
+    },
+
+    // GitHub 리포지토리 제거
+    removeRepository: async (repositoryId: number): Promise<any> => {
+      return api.delete<any>(`/api/repositories/github/${repositoryId}`)
+    },
+
+    // GitHub 리포지토리 활성화/비활성화 토글
+    toggleRepository: async (repositoryId: number): Promise<any> => {
+      return api.put<any>(`/api/repositories/github/${repositoryId}/toggle`)
+    }
   }
 } 

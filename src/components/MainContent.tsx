@@ -9,6 +9,9 @@ interface ConnectedService {
     id: string
     type: string
     name: string
+    repositoryName?: string // Git 서비스용
+    repositoryUrl?: string
+    workspaceName?: string // Notion/Slack용
 }
 
 interface MainContentProps {
@@ -32,11 +35,16 @@ export default function MainContent({ selectedMenu, connectedServices, hasOpenAI
 
             switch (selectedService.type) {
                 case 'slack':
-                    return <SlackContent serviceId={selectedService.id} serviceName={selectedService.name} config={config} />
+                    return <SlackContent serviceId={selectedService.id} serviceName={selectedService.workspaceName || selectedService.name} config={config} />
                 case 'notion':
-                    return <NotionContent serviceId={selectedService.id} serviceName={selectedService.name} config={config} />
+                    return <NotionContent serviceId={selectedService.id} serviceName={selectedService.workspaceName || selectedService.name} config={config} />
                 case 'git':
-                    return <GitContent serviceId={selectedService.id} serviceName={selectedService.name} config={config} />
+                    return <GitContent 
+                        serviceId={selectedService.id} 
+                        serviceName={selectedService.repositoryName || selectedService.name} 
+                        config={config}
+                        repositoryUrl={selectedService.repositoryUrl}
+                    />
                 default:
                     return <div className="p-6"><p className="text-gray-500">알 수 없는 서비스입니다.</p></div>
             }

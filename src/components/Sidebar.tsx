@@ -9,6 +9,9 @@ interface ConnectedService {
     id: string
     type: string
     name: string
+    repositoryName?: string // Git 서비스용
+    repositoryUrl?: string
+    workspaceName?: string // Notion/Slack용
 }
 
 interface SidebarProps {
@@ -548,7 +551,7 @@ export default function Sidebar({
                         </button>
                     </li>
 
-                    {/* 연결된 서비스들을 순서대로 나열 */}
+                    {/* 연결된 서비스들을 리포지토리/워크스페이스별로 나열 */}
                     {connectedServices.map((service) => (
                         <li key={service.id}>
                             <button
@@ -561,8 +564,17 @@ export default function Sidebar({
                                 <span className="text-lg mr-3">
                                     {allServices.find(s => s.id === service.type)?.icon || '📄'}
                                 </span>
-                                <span className="flex-1">{service.name}</span>
-                                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium truncate">
+                                        {service.repositoryName || service.workspaceName || service.name}
+                                    </div>
+                                    {(service.repositoryName || service.workspaceName) && (
+                                        <div className="text-xs text-gray-500 truncate">
+                                            {allServices.find(s => s.id === service.type)?.label}
+                                        </div>
+                                    )}
+                                </div>
+                                <span className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span>
                             </button>
                         </li>
                     ))}

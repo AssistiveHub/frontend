@@ -1,143 +1,79 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { integrationApi } from '@/utils/api'
 
 interface GitContentProps {
     serviceId: string;
     serviceName: string;
     config: Record<string, string>;
+    repositoryUrl?: string;
 }
 
-interface GitHubIntegration {
-    id: number;
-    githubUsername: string;
-    repositoryName: string;
-    isActive: boolean;
-    connectedAt: string;
-    lastSyncAt: string;
+interface RepositoryInfo {
+    name: string;
+    fullName: string;
+    description: string;
+    language: string;
+    stars: number;
+    forks: number;
+    openIssues: number;
+    lastUpdated: string;
 }
 
-interface GitHubStats {
-    totalIntegrations: number;
-    activeIntegrations: number;
-    inactiveIntegrations: number;
+interface CommitInfo {
+    hash: string;
+    message: string;
+    author: string;
+    date: string;
 }
 
-export default function GitContent({ serviceName }: GitContentProps) {
-    const [integrations, setIntegrations] = useState<GitHubIntegration[]>([])
-    const [stats, setStats] = useState<GitHubStats | null>(null)
+export default function GitContent({ serviceName, repositoryUrl }: GitContentProps) {
+    const [repositoryInfo, setRepositoryInfo] = useState<RepositoryInfo | null>(null)
+    const [commits, setCommits] = useState<CommitInfo[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [showManualSetup, setShowManualSetup] = useState(false)
-    const [manualToken, setManualToken] = useState('')
-    const [tokenValidating, setTokenValidating] = useState(false)
 
     useEffect(() => {
-        loadGitHubData()
+        loadRepositoryData()
     }, [])
 
-    const loadGitHubData = async () => {
+    const loadRepositoryData = async () => {
         try {
             setLoading(true)
             setError(null)
 
-            const [integrationsResult, statsResult] = await Promise.all([
-                integrationApi.github.getIntegrations(),
-                integrationApi.github.getStats()
+            // Mock data for demonstration
+            setRepositoryInfo({
+                name: serviceName,
+                fullName: `owner/${serviceName}`,
+                description: '리포지토리 설명이 여기에 표시됩니다.',
+                language: 'TypeScript',
+                stars: 24,
+                forks: 8,
+                openIssues: 3,
+                lastUpdated: new Date().toISOString()
+            })
+
+            setCommits([
+                {
+                    hash: 'a1b2c3d',
+                    message: 'feat: 새로운 기능 추가',
+                    author: 'developer',
+                    date: new Date(Date.now() - 86400000).toISOString()
+                },
+                {
+                    hash: 'e4f5g6h',
+                    message: 'fix: 버그 수정',
+                    author: 'developer',
+                    date: new Date(Date.now() - 172800000).toISOString()
+                }
             ])
-
-            if (integrationsResult.success) {
-                setIntegrations(integrationsResult.data || [])
-            }
-
-            if (statsResult.success) {
-                setStats(statsResult.data)
-            }
 
         } catch (err: unknown) {
             const error = err as Error
             setError(error.message || '데이터를 불러오는 중 오류가 발생했습니다.')
         } finally {
             setLoading(false)
-        }
-    }
-
-    const handleOAuthConnect = async () => {
-        try {
-            const result = await integrationApi.github.getAuthUrl()
-            if (result.success && result.authUrl) {
-                window.location.href = result.authUrl
-            }
-        } catch (err: unknown) {
-            const error = err as Error
-            setError(error.message || 'OAuth 연동 중 오류가 발생했습니다.')
-        }
-    }
-
-    const handleManualConnect = async () => {
-        if (!manualToken.trim()) {
-            setError('토큰을 입력해주세요.')
-            return
-        }
-
-        try {
-            setTokenValidating(true)
-            setError(null)
-
-            const validateResult = await integrationApi.github.validateToken(manualToken)
-            
-            if (!validateResult.success || !validateResult.isValid) {
-                setError('유효하지 않은 토큰입니다.')
-                return
-            }
-
-            const setupData = {
-                token: manualToken,
-                serviceName: serviceName || 'GitHub Integration'
-            }
-
-            const result = await integrationApi.github.createManualSetup(setupData)
-            
-            if (result.success) {
-                setShowManualSetup(false)
-                setManualToken('')
-                await loadGitHubData()
-            }
-
-        } catch (err: unknown) {
-            const error = err as Error
-            setError(error.message || '수동 연동 중 오류가 발생했습니다.')
-        } finally {
-            setTokenValidating(false)
-        }
-    }
-
-    const handleToggleIntegration = async (integrationId: number) => {
-        try {
-            const result = await integrationApi.github.toggle(integrationId)
-            if (result.success) {
-                await loadGitHubData()
-            }
-        } catch (err: unknown) {
-            const error = err as Error
-            setError(error.message || '연동 상태 변경 중 오류가 발생했습니다.')
-        }
-    }
-
-    const handleDisconnect = async (integrationId: number) => {
-        if (!confirm('정말로 이 연동을 해제하시겠습니까?')) {
-            return
-        }
-
-        try {
-            const result = await integrationApi.github.disconnect(integrationId)
-            if (result.success) {
-                await loadGitHubData()
-            }
-        } catch (err: unknown) {
-            const error = err as Error
-            setError(error.message || '연동 해제 중 오류가 발생했습니다.')
         }
     }
 
@@ -159,9 +95,20 @@ export default function GitContent({ serviceName }: GitContentProps) {
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold text-gray-900 mb-2 flex items-center">
                         <span className="text-2xl mr-3">🔧</span>
-                        {serviceName}
+                        {repositoryInfo?.fullName || serviceName}
                     </h1>
-                    <p className="text-gray-600">깃허브 리포지토리와의 연동을 관리하고 개발 활동을 추적하세요</p>
+                    <p className="text-gray-600">{repositoryInfo?.description || '리포지토리 정보를 확인하세요'}</p>
+                    {repositoryUrl && (
+                        <a 
+                            href={repositoryUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center mt-2 text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                            <span className="mr-1">🔗</span>
+                            리포지토리 보기
+                        </a>
+                    )}
                 </div>
 
                 {/* 오류 메시지 */}
@@ -186,167 +133,75 @@ export default function GitContent({ serviceName }: GitContentProps) {
                     </div>
                 )}
 
-                {/* 통계 카드 */}
-                {stats && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {/* 리포지토리 통계 */}
+                {repositoryInfo && (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
-                                <h3 className="text-sm font-medium text-gray-500">전체 연동</h3>
-                                <span className="text-blue-600">📊</span>
+                                <h3 className="text-sm font-medium text-gray-500">언어</h3>
+                                <span className="text-blue-600">💻</span>
                             </div>
-                            <div className="text-xl font-bold text-gray-900">{stats.totalIntegrations}</div>
-                            <p className="text-xs text-gray-500">리포지토리</p>
+                            <div className="text-xl font-bold text-gray-900">{repositoryInfo.language}</div>
                         </div>
 
                         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
-                                <h3 className="text-sm font-medium text-gray-500">활성 연동</h3>
-                                <span className="text-green-600">✅</span>
+                                <h3 className="text-sm font-medium text-gray-500">스타</h3>
+                                <span className="text-yellow-600">⭐</span>
                             </div>
-                            <div className="text-xl font-bold text-gray-900">{stats.activeIntegrations}</div>
-                            <p className="text-xs text-green-600">정상 작동</p>
+                            <div className="text-xl font-bold text-gray-900">{repositoryInfo.stars}</div>
                         </div>
 
                         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
-                                <h3 className="text-sm font-medium text-gray-500">비활성 연동</h3>
-                                <span className="text-gray-600">⏸️</span>
+                                <h3 className="text-sm font-medium text-gray-500">포크</h3>
+                                <span className="text-green-600">🍴</span>
                             </div>
-                            <div className="text-xl font-bold text-gray-900">{stats.inactiveIntegrations}</div>
-                            <p className="text-xs text-gray-500">일시 중지</p>
+                            <div className="text-xl font-bold text-gray-900">{repositoryInfo.forks}</div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="text-sm font-medium text-gray-500">이슈</h3>
+                                <span className="text-red-600">🐛</span>
+                            </div>
+                            <div className="text-xl font-bold text-gray-900">{repositoryInfo.openIssues}</div>
                         </div>
                     </div>
                 )}
 
-                {/* 연동 추가 버튼 */}
-                <div className="mb-6">
-                    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">새 깃허브 리포지토리 연동</h3>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                            <button
-                                onClick={handleOAuthConnect}
-                                className="flex-1 flex items-center justify-center px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-                            >
-                                <span className="mr-2">🔗</span>
-                                OAuth로 연동하기
-                            </button>
-                            <button
-                                onClick={() => setShowManualSetup(!showManualSetup)}
-                                className="flex-1 flex items-center justify-center px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                            >
-                                <span className="mr-2">⚙️</span>
-                                수동으로 연동하기
-                            </button>
-                        </div>
-
-                        {/* 수동 연동 폼 */}
-                        {showManualSetup && (
-                            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                                <h4 className="text-md font-medium text-gray-900 mb-3">깃허브 Personal Access Token으로 연동</h4>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            GitHub Personal Access Token
-                                        </label>
-                                        <input
-                                            type="password"
-                                            value={manualToken}
-                                            onChange={(e) => setManualToken(e.target.value)}
-                                            placeholder="ghp_your-personal-access-token"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
-                                        />
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            깃허브 설정에서 Personal Access Token을 생성하여 입력하세요 (repo 권한 필요)
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={handleManualConnect}
-                                            disabled={tokenValidating || !manualToken.trim()}
-                                            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:bg-gray-400 transition-colors"
-                                        >
-                                            {tokenValidating ? '검증 중...' : '연동하기'}
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setShowManualSetup(false)
-                                                setManualToken('')
-                                                setError(null)
-                                            }}
-                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
-                                        >
-                                            취소
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 연동된 리포지토리 목록 */}
+                {/* 최근 커밋 */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     <div className="p-6 border-b border-gray-200">
-                        <h3 className="text-lg font-semibold text-gray-900">연동된 리포지토리</h3>
-                        <p className="text-sm text-gray-600 mt-1">현재 연결된 깃허브 리포지토리 목록입니다</p>
+                        <h3 className="text-lg font-semibold text-gray-900">최근 커밋</h3>
+                        <p className="text-sm text-gray-600 mt-1">최신 개발 활동을 확인하세요</p>
                     </div>
 
-                    {integrations.length === 0 ? (
+                    {commits.length === 0 ? (
                         <div className="p-8 text-center">
-                            <div className="text-4xl mb-4">🔧</div>
-                            <h4 className="text-lg font-medium text-gray-900 mb-2">연동된 리포지토리가 없습니다</h4>
-                            <p className="text-gray-600 mb-4">위의 버튼을 사용하여 깃허브 리포지토리를 연동해보세요</p>
+                            <div className="text-4xl mb-4">📝</div>
+                            <h4 className="text-lg font-medium text-gray-900 mb-2">커밋이 없습니다</h4>
+                            <p className="text-gray-600">아직 커밋 데이터가 없습니다</p>
                         </div>
                     ) : (
                         <div className="divide-y divide-gray-200">
-                            {integrations.map((integration) => (
-                                <div key={integration.id} className="p-6">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-4">
-                                            <div className="w-12 h-12 bg-gray-900 rounded-lg flex items-center justify-center">
-                                                <span className="text-white text-xl">🔧</span>
-                                            </div>
-                                            <div>
-                                                <h4 className="text-lg font-medium text-gray-900">{integration.repositoryName}</h4>
-                                                <p className="text-sm text-gray-600">@{integration.githubUsername}</p>
-                                                <p className="text-xs text-gray-500">
-                                                    연결됨: {new Date(integration.connectedAt).toLocaleDateString('ko-KR')}
-                                                </p>
+                            {commits.map((commit) => (
+                                <div key={commit.hash} className="p-6">
+                                    <div className="flex items-start space-x-4">
+                                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <span className="text-sm font-mono text-gray-600">{commit.hash.substring(0, 3)}</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-900">{commit.message}</p>
+                                            <div className="mt-1 flex items-center text-xs text-gray-500">
+                                                <span>{commit.author}</span>
+                                                <span className="mx-2">•</span>
+                                                <span>{new Date(commit.date).toLocaleDateString('ko-KR')}</span>
                                             </div>
                                         </div>
-
-                                        <div className="flex items-center space-x-3">
-                                            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                                integration.isActive 
-                                                    ? 'bg-green-100 text-green-800' 
-                                                    : 'bg-gray-100 text-gray-800'
-                                            }`}>
-                                                {integration.isActive ? '활성' : '비활성'}
-                                            </div>
-                                            
-                                            <button
-                                                onClick={() => handleToggleIntegration(integration.id)}
-                                                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                                                    integration.isActive
-                                                        ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                                                        : 'bg-green-100 text-green-800 hover:bg-green-200'
-                                                }`}
-                                            >
-                                                {integration.isActive ? '일시정지' : '활성화'}
-                                            </button>
-
-                                            <button
-                                                onClick={() => handleDisconnect(integration.id)}
-                                                className="px-3 py-1 bg-red-100 text-red-800 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
-                                            >
-                                                연동해제
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* 마지막 동기화 시간 */}
-                                    <div className="mt-4 text-sm text-gray-500">
-                                        마지막 동기화: {integration.lastSyncAt ? new Date(integration.lastSyncAt).toLocaleString('ko-KR') : '없음'}
+                                        <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                                            {commit.hash}
+                                        </span>
                                     </div>
                                 </div>
                             ))}

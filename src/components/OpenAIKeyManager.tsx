@@ -38,7 +38,7 @@ export default function OpenAIKeyManager({ onKeyRegistered }: OpenAIKeyManagerPr
             }
 
             // 1. 먼저 키 검증
-            const validateResponse = await fetch('http://localhost:8080/api/openai-keys/validate', {
+            const validateResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/openai-keys/validate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -63,7 +63,7 @@ export default function OpenAIKeyManager({ onKeyRegistered }: OpenAIKeyManagerPr
             }
 
             // 2. 검증 성공 시 키 저장
-            const saveResponse = await fetch('http://localhost:8080/api/openai-keys', {
+            const saveResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/openai-keys`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -15,6 +15,8 @@ function GitHubCallbackContent() {
             try {
                 const code = searchParams.get('code')
                 const error = searchParams.get('error')
+                const mode = searchParams.get('mode')
+                const state = searchParams.get('state')
 
                 if (error) {
                     setStatus('error')
@@ -28,7 +30,43 @@ function GitHubCallbackContent() {
                     return
                 }
 
-                // 백엔드에 콜백 처리 요청
+                // 리포지토리 선택 모드인 경우 (URL 쿼리 또는 OAuth state로 감지)
+                if (mode === 'repo_select' || state === 'repo_select') {
+                    // 백엔드 API로 토큰 교환
+                    try {
+                        const tokenResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/repositories/github/exchange-token`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: JSON.stringify({ code })
+                        })
+
+                        const tokenResult = await tokenResponse.json()
+                        
+                        if (tokenResult.success && tokenResult.data.access_token) {
+                            // localStorage에 임시 토큰 저장하고 대시보드로 이동
+                            localStorage.setItem('github_temp_token', tokenResult.data.access_token)
+                            localStorage.setItem('github_auth_mode', 'repo_select')
+                            
+                            setStatus('success')
+                            setMessage('GitHub 인증이 완료되었습니다. 리포지토리를 선택해주세요.')
+                            
+                            setTimeout(() => {
+                                router.push('/dashboard?open_git_modal=true')
+                            }, 2000)
+                        } else {
+                            throw new Error(tokenResult.message || '액세스 토큰을 받지 못했습니다.')
+                        }
+                    } catch (tokenError) {
+                        setStatus('error')
+                        setMessage('GitHub 토큰 교환 중 오류가 발생했습니다.')
+                    }
+                    return
+                }
+
+                // 기존 통합 연동 모드
                 const result = await integrationApi.github.handleCallback(
                     code,
                     window.location.origin + '/integrations/github/callback'
