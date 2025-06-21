@@ -59,7 +59,7 @@ function GitHubCallbackContent() {
                         } else {
                             throw new Error(tokenResult.message || '액세스 토큰을 받지 못했습니다.')
                         }
-                    } catch (tokenError) {
+                    } catch {
                         setStatus('error')
                         setMessage('GitHub 토큰 교환 중 오류가 발생했습니다.')
                     }

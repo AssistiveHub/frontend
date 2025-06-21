@@ -129,8 +129,7 @@ export default function Sidebar({
         handleResize() // 초기 체크
 
         return () => window.removeEventListener('resize', handleResize)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sidebarWidth, onSidebarStateChange])
+    }, [sidebarWidth, onSidebarStateChange, onToggleSidebar, isCollapsed])
 
     // 리사이징 이벤트 리스너
     useEffect(() => {

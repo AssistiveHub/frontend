@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface GitContentProps {
     serviceId: string;
@@ -33,11 +33,7 @@ export default function GitContent({ serviceName, repositoryUrl }: GitContentPro
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
-    useEffect(() => {
-        loadRepositoryData()
-    }, [])
-
-    const loadRepositoryData = async () => {
+    const loadRepositoryData = useCallback(async () => {
         try {
             setLoading(true)
             setError(null)
@@ -75,7 +71,11 @@ export default function GitContent({ serviceName, repositoryUrl }: GitContentPro
         } finally {
             setLoading(false)
         }
-    }
+    }, [serviceName])
+
+    useEffect(() => {
+        loadRepositoryData()
+    }, [loadRepositoryData])
 
     if (loading) {
         return (
