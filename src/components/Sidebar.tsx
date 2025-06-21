@@ -29,7 +29,8 @@ interface SidebarProps {
 const allServices = [
     { id: 'slack', label: '슬랙', icon: '💬' },
     { id: 'notion', label: '노션', icon: '📝' },
-    { id: 'git', label: '깃', icon: '🔧' },
+    { id: 'github', label: '깃허브', icon: '🔧' },
+    { id: 'gitlab', label: '깃랩', icon: '🦊' },
 ]
 
 export default function Sidebar({ 

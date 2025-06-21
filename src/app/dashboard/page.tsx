@@ -22,7 +22,8 @@ interface ConnectedService {
 const allServices = [
     { id: 'slack', label: '슬랙', icon: '💬' },
     { id: 'notion', label: '노션', icon: '📝' },
-    { id: 'git', label: '깃', icon: '🔧' },
+    { id: 'github', label: '깃허브', icon: '🔧' },
+    { id: 'gitlab', label: '깃랩', icon: '🦊' },
 ]
 
 export default function Dashboard() {
@@ -64,7 +65,7 @@ export default function Dashboard() {
                     const serviceType = (integration.serviceType as string)?.toLowerCase()
                     let type = 'unknown'
                     
-                    // serviceType을 프론트엔드 타입으로 매핑 (GitHub 제외)
+                    // serviceType을 프론트엔드 타입으로 매핑
                     switch (serviceType) {
                         case 'slack':
                             type = 'slack'
@@ -73,7 +74,7 @@ export default function Dashboard() {
                             type = 'notion'
                             break
                         case 'gitlab':
-                            type = 'git'
+                            type = 'gitlab'
                             break
                         default:
                             if (serviceType !== 'github') { // GitHub는 새로운 API로 처리
@@ -115,7 +116,7 @@ export default function Dashboard() {
                     if ((repo.isActive as boolean)) { // 활성 리포지토리만
                         services.push({
                             id: `git-repo-${repo.id}`,
-                            type: 'git',
+                            type: 'github',
                             name: repo.repositoryName as string,
                             repositoryName: repo.repositoryName as string,
                             repositoryUrl: repo.repositoryUrl as string
@@ -151,7 +152,7 @@ export default function Dashboard() {
         const openGitModal = params.get('open_git_modal')
         
         if (openGitModal === 'true') {
-            setShowServiceSetup('git')
+            setShowServiceSetup('github')
             // URL에서 파라미터 제거
             window.history.replaceState({}, '', '/dashboard')
         }

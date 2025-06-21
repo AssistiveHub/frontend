@@ -25,7 +25,7 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
 
     // GitHub OAuth 완료 감지
     useEffect(() => {
-        if (serviceId === 'git') {
+        if (serviceId === 'github') {
             const tempToken = localStorage.getItem('github_temp_token')
             const authMode = localStorage.getItem('github_auth_mode')
             
@@ -70,13 +70,21 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
             tokenPlaceholder: 'secret_your-integration-token',
             description: '노션 워크스페이스와 연동하여 페이지와 데이터베이스를 관리합니다.'
         },
-        git: {
+        github: {
             name: '깃허브',
             icon: '🔧',
             color: 'gray',
             tokenLabel: 'Personal Access Token',
             tokenPlaceholder: 'ghp_your-personal-access-token',
             description: '깃허브 리포지토리와 연동하여 커밋과 이슈를 추적합니다.'
+        },
+        gitlab: {
+            name: '깃랩',
+            icon: '🦊',
+            color: 'orange',
+            tokenLabel: 'Personal Access Token',
+            tokenPlaceholder: 'glpat_your-personal-access-token',
+            description: '깃랩 리포지토리와 연동하여 커밋과 이슈를 추적합니다.'
         }
     }
 
@@ -88,7 +96,7 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
             setLoading(true)
             setError(null)
 
-            if (serviceId === 'git') {
+            if (serviceId === 'github') {
                 // GitHub OAuth for repository selection - Vercel style
                 const params = new URLSearchParams({
                     client_id: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || '',
@@ -98,6 +106,12 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                 })
                 
                 window.location.href = `https://github.com/login/oauth/authorize?${params.toString()}`
+                return
+            }
+
+            if (serviceId === 'gitlab') {
+                // GitLab OAuth 처리 (추후 구현)
+                setError('GitLab OAuth는 준비 중입니다. 수동 설정을 이용해주세요.')
                 return
             }
 
@@ -191,7 +205,7 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
             }
 
             await response.json()
-            onConnect('git', {
+            onConnect('github', {
                 name: repo.name,
                 repositoryUrl: repo.html_url,
                 token: githubAccessToken,
@@ -205,9 +219,18 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
     }
 
     const handleManualConnect = async () => {
-        if (serviceId === 'git') {
+        if (serviceId === 'github') {
             if (!token.trim()) {
                 setError('GitHub Personal Access Token을 입력해주세요.')
+                return
+            }
+            if (!repositoryUrl.trim()) {
+                setError('리포지토리 URL을 입력해주세요.')
+                return
+            }
+        } else if (serviceId === 'gitlab') {
+            if (!token.trim()) {
+                setError('GitLab Personal Access Token을 입력해주세요.')
                 return
             }
             if (!repositoryUrl.trim()) {
@@ -220,7 +243,7 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                 return
             }
             if (!token.trim()) {
-                setError('토큰을 입력해주세요.')
+                setError(`${config.tokenLabel}을 입력해주세요.`)
                 return
             }
         }
@@ -229,7 +252,7 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
             setLoading(true)
             setError(null)
 
-            // 토큰 유효성 검증
+            // 토큰 검증
             let validateResult
             switch (serviceId) {
                 case 'slack':
@@ -238,14 +261,17 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                 case 'notion':
                     validateResult = await integrationApi.notion.validateToken(token)
                     break
-                case 'git':
+                case 'github':
                     validateResult = await integrationApi.github.validateToken(token)
+                    break
+                case 'gitlab':
+                    validateResult = await integrationApi.gitlab.validateToken(token)
                     break
                 default:
                     throw new Error('지원하지 않는 서비스입니다.')
             }
 
-            if (!validateResult.success || !validateResult.isValid) {
+            if (!validateResult.success || (!validateResult.isValid && !validateResult.valid)) {
                 setError('유효하지 않은 토큰입니다.')
                 return
             }
@@ -254,11 +280,11 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
             let setupData
             let result
 
-            if (serviceId === 'git') {
+            if (serviceId === 'github') {
                 // GitHub 리포지토리 추가
                 setupData = {
-                    accessToken: token,
-                    repositoryUrl: repositoryUrl
+                    repositoryUrl: repositoryUrl,
+                    accessToken: token
                 }
                 result = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/repositories/github`, {
                     method: 'POST',
@@ -268,17 +294,34 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                     },
                     body: JSON.stringify(setupData)
                 }).then(res => res.json())
-            } else {
-                // 기존 서비스 연동
+            } else if (serviceId === 'gitlab') {
+                // GitLab 연동 생성
                 setupData = {
-                    token,
-                    serviceName,
-                    ...(serviceId === 'slack' && {
-                        enableMentions: true,
-                        enableDirectMessages: true,
-                        enableChannelMessages: false,
-                        enableThreadReplies: true
-                    })
+                    username: validateResult.userInfo?.username || 'user',
+                    accessToken: token,
+                    gitlabUrl: repositoryUrl.includes('gitlab.com') ? 'https://gitlab.com' : 
+                               repositoryUrl.split('/').slice(0, 3).join('/'),
+                    gitlabUserId: validateResult.userInfo?.gitlabUserId || '',
+                    avatarUrl: validateResult.userInfo?.avatarUrl || '',
+                    profileUrl: validateResult.userInfo?.profileUrl || '',
+                    email: validateResult.userInfo?.email || '',
+                    projects: [{
+                        projectPath: repositoryUrl.split('/').slice(-2).join('/').replace('.git', ''),
+                        projectUrl: repositoryUrl,
+                        syncEnabled: true
+                    }],
+                    autoSyncEnabled: true,
+                    syncCommits: true,
+                    syncMergeRequests: true,
+                    syncIssues: true
+                }
+
+                result = await integrationApi.gitlab.createManualSetup(setupData)
+            } else {
+                // 기존 통합 서비스 연동
+                setupData = {
+                    serviceName: serviceName,
+                    accessToken: token
                 }
 
                 switch (serviceId) {
@@ -295,10 +338,19 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
 
             if (result.success) {
                 // 성공 시 부모 컴포넌트에 알림
-                if (serviceId === 'git') {
+                if (serviceId === 'github') {
                     onConnect(serviceId, {
                         name: result.data?.repositoryName || 'GitHub Repository',
                         repositoryUrl: repositoryUrl,
+                        token: token,
+                        method: 'manual'
+                    })
+                } else if (serviceId === 'gitlab') {
+                    onConnect(serviceId, {
+                        name: result.data?.username || 'GitLab Integration',
+                        gitlabUrl: repositoryUrl.includes('gitlab.com') ? 'https://gitlab.com' : 
+                                   repositoryUrl.split('/').slice(0, 3).join('/'),
+                        projectPath: repositoryUrl.split('/').slice(-2).join('/').replace('.git', ''),
                         token: token,
                         method: 'manual'
                     })
@@ -393,7 +445,7 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                     </div>
 
                     {/* Git OAuth 방식 안내 */}
-                    {serviceId === 'git' && setupMethod === 'oauth' && (
+                    {serviceId === 'github' && setupMethod === 'oauth' && (
                         <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
                             <div className="flex items-center">
                                 <div className="text-green-600 mr-3">
@@ -410,7 +462,7 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                     )}
 
                     {/* Git Manual 방식 안내 */}
-                    {serviceId === 'git' && setupMethod === 'manual' && (
+                    {serviceId === 'github' && setupMethod === 'manual' && (
                         <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <div className="flex items-center">
                                 <div className="text-blue-600 mr-3">
@@ -426,10 +478,44 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                         </div>
                     )}
 
+                    {/* GitLab OAuth 방식 안내 */}
+                    {serviceId === 'gitlab' && setupMethod === 'oauth' && (
+                        <div className="mb-6 bg-orange-50 border border-orange-200 rounded-lg p-4">
+                            <div className="flex items-center">
+                                <div className="text-orange-600 mr-3">
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-medium text-orange-900">GitLab OAuth 연동</h4>
+                                    <p className="text-sm text-orange-700">GitLab OAuth는 현재 준비 중입니다. 수동 연동을 이용해주세요.</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* GitLab Manual 방식 안내 */}
+                    {serviceId === 'gitlab' && setupMethod === 'manual' && (
+                        <div className="mb-6 bg-orange-50 border border-orange-200 rounded-lg p-4">
+                            <div className="flex items-center">
+                                <div className="text-orange-600 mr-3">
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-medium text-orange-900">GitLab 수동 연동</h4>
+                                    <p className="text-sm text-orange-700">GitLab Personal Access Token과 리포지토리 URL을 입력하여 연동합니다.</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* OAuth 연동 */}
                     {setupMethod === 'oauth' && !showRepositorySelect && (
                         <div className="space-y-4">
-                            {serviceId !== 'git' && (
+                            {serviceId !== 'github' && serviceId !== 'gitlab' && (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         서비스 이름
@@ -456,7 +542,9 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                                 ) : (
                                     <>
                                         <span className="mr-2">🔗</span>
-                                        {serviceId === 'git' ? 'GitHub에서 인증하기' : `${config.name}에서 인증하기`}
+                                        {serviceId === 'github' ? 'GitHub에서 인증하기' : 
+                                         serviceId === 'gitlab' ? 'GitLab에서 인증하기' : 
+                                         `${config.name}에서 인증하기`}
                                     </>
                                 )}
                             </button>
@@ -464,7 +552,7 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                     )}
 
                     {/* GitHub 리포지토리 선택 화면 */}
-                    {setupMethod === 'oauth' && serviceId === 'git' && showRepositorySelect && (
+                    {setupMethod === 'oauth' && serviceId === 'github' && showRepositorySelect && (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-lg font-medium text-gray-900">리포지토리 선택</h3>
@@ -574,8 +662,8 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                     {/* 수동 연동 */}
                     {setupMethod === 'manual' && (
                         <div className="space-y-4">
-                            {serviceId === 'git' ? (
-                                // Git 리포지토리 연동
+                            {serviceId === 'github' ? (
+                                // GitHub 리포지토리 연동
                                 <>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -605,6 +693,40 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                                         />
                                         <p className="text-xs text-gray-500 mt-1">
                                             연동할 깃허브 리포지토리의 URL을 입력하세요
+                                        </p>
+                                    </div>
+                                </>
+                            ) : serviceId === 'gitlab' ? (
+                                // GitLab 리포지토리 연동
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {config.tokenLabel}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={token}
+                                            onChange={(e) => setToken(e.target.value)}
+                                            placeholder={config.tokenPlaceholder}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            GitLab 설정에서 Personal Access Token을 생성하여 입력하세요 (read_repository 권한 필요)
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            리포지토리 URL
+                                        </label>
+                                        <input
+                                            type="url"
+                                            value={repositoryUrl}
+                                            onChange={(e) => setRepositoryUrl(e.target.value)}
+                                            placeholder="https://gitlab.com/username/repository"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            연동할 GitLab 리포지토리의 URL을 입력하세요
                                         </p>
                                     </div>
                                 </>
@@ -643,7 +765,7 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                             )}
                             <button
                                 onClick={handleManualConnect}
-                                disabled={loading || (serviceId === 'git' ? (!token.trim() || !repositoryUrl.trim()) : (!serviceName.trim() || !token.trim()))}
+                                disabled={loading || ((serviceId === 'github' || serviceId === 'gitlab') ? (!token.trim() || !repositoryUrl.trim()) : (!serviceName.trim() || !token.trim()))}
                                 className={`w-full py-3 px-4 bg-${config.color}-600 text-white rounded-lg hover:bg-${config.color}-700 disabled:bg-gray-400 transition-colors flex items-center justify-center`}
                             >
                                 {loading ? (
@@ -654,7 +776,9 @@ export default function ServiceSetupModal({ serviceId, onConnect, onClose }: Ser
                                 ) : (
                                     <>
                                         <span className="mr-2">⚙️</span>
-                                        {serviceId === 'git' ? '리포지토리 추가하기' : '수동으로 연동하기'}
+                                        {serviceId === 'github' ? '리포지토리 추가하기' : 
+                                         serviceId === 'gitlab' ? '리포지토리 추가하기' : 
+                                         '수동으로 연동하기'}
                                     </>
                                 )}
                             </button>

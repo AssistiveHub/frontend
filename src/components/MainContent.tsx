@@ -4,6 +4,7 @@ import OverviewContent from '@/components/content/OverviewContent'
 import SlackContent from '@/components/content/SlackContent'
 import NotionContent from '@/components/content/NotionContent'
 import GitContent from '@/components/content/GitContent'
+import GitLabContent from '@/components/content/GitLabContent'
 
 interface ConnectedService {
     id: string
@@ -38,13 +39,14 @@ export default function MainContent({ selectedMenu, connectedServices, hasOpenAI
                     return <SlackContent serviceId={selectedService.id} serviceName={selectedService.workspaceName || selectedService.name} config={config} />
                 case 'notion':
                     return <NotionContent serviceId={selectedService.id} serviceName={selectedService.workspaceName || selectedService.name} config={config} />
-                case 'git':
+                case 'github':
                     return <GitContent 
                         serviceId={selectedService.id} 
                         serviceName={selectedService.repositoryName || selectedService.name} 
                         config={config}
-                        repositoryUrl={selectedService.repositoryUrl}
                     />
+                case 'gitlab':
+                    return <GitLabContent serviceId={selectedService.id} serviceName={selectedService.repositoryName || selectedService.name} config={config} />
                 default:
                     return <div className="p-6"><p className="text-gray-500">알 수 없는 서비스입니다.</p></div>
             }
